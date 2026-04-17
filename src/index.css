@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 6% 5%;
+    --foreground: 0 0% 98%;
+    --card: 240 4% 10%;
+    --card-foreground: 0 0% 98%;
+    --primary: 243 90% 82%;
+    --primary-foreground: 240 24% 20%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 12%;
+    --muted-foreground: 240 5% 67%;
+    --border: 240 5% 15%;
+    --input: 240 5% 15%;
+    --ring: 243 90% 82%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(116, 187, 255, 0.08), transparent 24%),
+      radial-gradient(circle at 80% 42%, rgba(167, 160, 255, 0.06), transparent 24%),
+      linear-gradient(180deg, #09090a 0%, #09090a 100%);
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+
+  ::selection {
+    background: rgba(186, 181, 255, 0.36);
+    color: white;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-[30px] border border-white/[0.05] bg-card/90 shadow-soft backdrop-blur-sm;
+  }
+
+  .label {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.34em] text-primary/95;
+  }
+
+  .section-frame {
+    @apply mx-auto w-full max-w-[1280px] px-4 sm:px-6 lg:px-8;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(180deg, #c3beff 0%, #9c95ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .subtle-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .panel-glow {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 26px 90px rgba(0, 0, 0, 0.32);
+  }
+}
