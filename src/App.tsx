@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ElementType, type HTMLAttributes } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType, type HTMLAttributes } from "react";
+import { animate, createScope, createTimeline, stagger } from "animejs";
 import {
   ArrowRight,
   BrainCircuit,
@@ -88,6 +89,7 @@ const PROCESS_STEPS: {
 ];
 
 function App() {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("services");
   const [heroMode, setHeroMode] = useState(true);
@@ -152,8 +154,203 @@ function App() {
     });
   };
 
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!prefersReducedMotion) {
+      root.classList.add("motion-ready");
+    }
+
+    const scope = createScope({
+      root,
+      mediaQueries: {
+        reduceMotion: "(prefers-reduced-motion: reduce)",
+        mobile: "(max-width: 767px)",
+      },
+    }).add((self) => {
+      if (!self) return;
+
+      const reduceMotion = self.matches.reduceMotion;
+      const isMobile = self.matches.mobile;
+      const cleanups: Array<() => void> = [];
+
+      if (!reduceMotion) {
+        createTimeline({
+          defaults: {
+            duration: isMobile ? 720 : 920,
+            ease: "outExpo",
+          },
+        })
+          .add(".js-hero-header-brand", { opacity: [0, 1], y: [-18, 0] }, 0)
+          .add(".js-hero-header-menu", { opacity: [0, 1], y: [-18, 0] }, 30)
+          .add(".js-hero-header-cta", { opacity: [0, 1], y: [-18, 0] }, 60)
+          .add(".js-hero-kicker", { opacity: [0, 1], y: [24, 0] }, 140)
+          .add(".js-hero-title", { opacity: [0, 1], y: [52, 0], scale: [0.985, 1] }, 200)
+          .add(
+            ".js-hero-cta",
+            {
+              opacity: [0, 1],
+              y: [30, 0],
+              delay: stagger(120),
+            },
+            320,
+          );
+
+        animate(".js-hero-bg", {
+          scale: [1.08, 1.12],
+          y: ["0rem", "-1.1rem"],
+          duration: 14000,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        animate(".js-live-badge", {
+          y: ["0rem", "-0.4rem"],
+          duration: 2600,
+          ease: "inOutSine",
+          loop: true,
+          alternate: true,
+        });
+
+        const revealObserver = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (!entry.isIntersecting) return;
+
+              const group = entry.target as HTMLElement;
+              const items = group.querySelectorAll<HTMLElement>("[data-animate-item]");
+              const ornaments = group.querySelectorAll<HTMLElement>("[data-animate-ornament]");
+
+              if (items.length) {
+                animate(items, {
+                  opacity: [0, 1],
+                  y: [isMobile ? 24 : 42, 0],
+                  scale: [0.985, 1],
+                  delay: stagger(isMobile ? 70 : 110, { start: 90 }),
+                  duration: isMobile ? 700 : 900,
+                  ease: "outExpo",
+                });
+              }
+
+              if (ornaments.length) {
+                animate(ornaments, {
+                  opacity: [0, 1],
+                  scale: [0.88, 1],
+                  rotate: [-10, 0],
+                  delay: stagger(80),
+                  duration: 820,
+                  ease: "outExpo",
+                });
+              }
+
+              revealObserver.unobserve(group);
+            });
+          },
+          {
+            threshold: 0.18,
+            rootMargin: "0px 0px -12% 0px",
+          },
+        );
+
+        root.querySelectorAll<HTMLElement>("[data-animate-group]").forEach((group) => {
+          revealObserver.observe(group);
+        });
+        cleanups.push(() => revealObserver.disconnect());
+
+        if (!isMobile) {
+          root.querySelectorAll<HTMLElement>(".js-hover-card").forEach((card) => {
+            const media = card.querySelector<HTMLElement>(".js-hover-media");
+            if (!media) return;
+
+            const handleEnter = () => {
+              animate(media, {
+                scale: 1.03,
+                duration: 520,
+                ease: "out(4)",
+              });
+            };
+
+            const handleMove = (event: MouseEvent) => {
+              const rect = card.getBoundingClientRect();
+              const x = ((event.clientX - rect.left) / rect.width - 0.5) * 18;
+              const y = ((event.clientY - rect.top) / rect.height - 0.5) * 14;
+
+              animate(media, {
+                x,
+                y,
+                duration: 340,
+                ease: "out(4)",
+              });
+            };
+
+            const handleLeave = () => {
+              animate(media, {
+                x: 0,
+                y: 0,
+                scale: 1,
+                duration: 680,
+                ease: "outExpo",
+              });
+            };
+
+            card.addEventListener("mouseenter", handleEnter);
+            card.addEventListener("mousemove", handleMove);
+            card.addEventListener("mouseleave", handleLeave);
+
+            cleanups.push(() => {
+              card.removeEventListener("mouseenter", handleEnter);
+              card.removeEventListener("mousemove", handleMove);
+              card.removeEventListener("mouseleave", handleLeave);
+            });
+          });
+        }
+      }
+
+      return () => {
+        cleanups.forEach((cleanup) => cleanup());
+      };
+    });
+
+    return () => {
+      root.classList.remove("motion-ready");
+      scope.revert();
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!menuOpen || !root) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      animate(root.querySelectorAll(".js-menu-item"), {
+        opacity: [0, 1],
+        x: [28, 0],
+        delay: stagger(90),
+        duration: 620,
+        ease: "outExpo",
+      });
+
+      animate(root.querySelectorAll(".js-menu-footer"), {
+        opacity: [0, 1],
+        y: [18, 0],
+        delay: 260,
+        duration: 700,
+        ease: "outExpo",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [menuOpen]);
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div
+      className="min-h-screen bg-background text-foreground"
+      ref={rootRef}
+    >
       <SiteHeader
         activeSection={activeSection}
         desktopNavItems={desktopNavItems}
@@ -171,7 +368,7 @@ function App() {
             <img
               alt=""
               aria-hidden="true"
-              className="h-full w-full scale-[1.08] object-cover object-center opacity-65 blur-[1.4px] brightness-[0.42] saturate-[0.75]"
+              className="js-hero-bg h-full w-full scale-[1.08] object-cover object-center opacity-65 blur-[1.4px] brightness-[0.42] saturate-[0.75]"
               src="/assets/hero-bg.png"
             />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(183,220,255,0.24),transparent_22%),radial-gradient(circle_at_70%_44%,rgba(160,153,255,0.16),transparent_20%)]" />
@@ -181,24 +378,24 @@ function App() {
 
           <Container className="relative z-10 flex flex-col items-center pb-20 pt-36 text-center md:pb-28 md:pt-44">
             <div className="max-w-[58rem]">
-              <p className="mb-8 text-[0.72rem] font-semibold uppercase tracking-[0.38em] text-white/55 sm:mb-10">
+              <p className="js-hero-kicker mb-8 text-[0.72rem] font-semibold uppercase tracking-[0.38em] text-white/55 sm:mb-10">
                 Performance Systems Studio
               </p>
-              <h1 className="text-[clamp(3.3rem,9vw,7.6rem)] font-semibold leading-[0.92] tracking-[-0.065em] text-white">
+              <h1 className="js-hero-title text-[clamp(3.3rem,9vw,7.6rem)] font-semibold leading-[0.92] tracking-[-0.065em] text-white">
                 Building the <span className="text-gradient">future</span>
               </h1>
             </div>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row">
               <Button
-                className="min-w-[11rem]"
+                className="js-hero-cta min-w-[11rem]"
                 onClick={() => navigateTo("contact")}
                 size="lg"
               >
                 Schedule a Call
               </Button>
               <Button
-                className="min-w-[11rem]"
+                className="js-hero-cta min-w-[11rem]"
                 onClick={() => navigateTo("projects")}
                 size="lg"
                 variant="outline"
@@ -215,21 +412,33 @@ function App() {
           id="services"
         >
           <Container className="space-y-16 md:space-y-20">
-            <div className="grid gap-10 lg:grid-cols-[1.55fr_0.8fr] lg:items-start">
-              <div>
+            <div
+              className="grid gap-10 lg:grid-cols-[1.55fr_0.8fr] lg:items-start"
+              data-animate-group
+            >
+              <div data-animate-item>
                 <p className="label">Our Specializations</p>
                 <h2 className="mt-5 max-w-[52rem] text-[clamp(3rem,7vw,5.85rem)] font-semibold leading-[0.96] tracking-[-0.065em]">
                   Tailored solutions for the <span className="text-gradient">modern enterprise.</span>
                 </h2>
               </div>
-              <p className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58">
+              <p
+                className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58"
+                data-animate-item
+              >
                 We architect high-performance digital ecosystems that bridge the gap between complex
                 engineering and intuitive user experience.
               </p>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[2.05fr_1fr]">
-              <div className="surface panel-glow relative overflow-hidden">
+            <div
+              className="grid gap-6 lg:grid-cols-[2.05fr_1fr]"
+              data-animate-group
+            >
+              <div
+                className="surface panel-glow relative overflow-hidden"
+                data-animate-item
+              >
                 <img
                   alt=""
                   aria-hidden="true"
@@ -260,7 +469,10 @@ function App() {
                 </div>
               </div>
 
-              <div className="surface panel-glow flex min-h-[30rem] flex-col justify-between p-8 md:p-10">
+              <div
+                className="surface panel-glow flex min-h-[30rem] flex-col justify-between p-8 md:p-10"
+                data-animate-item
+              >
                 <div className="space-y-7">
                   <IconBadge icon={BrainCircuit} />
                   <div className="space-y-4">
@@ -286,9 +498,15 @@ function App() {
               </div>
             </div>
 
-            <div className="surface panel-glow relative overflow-hidden">
+            <div
+              className="surface panel-glow relative overflow-hidden"
+              data-animate-group
+            >
               <div className="grid gap-10 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
-                <div className="flex min-h-[25rem] flex-col justify-between p-8 md:p-10">
+                <div
+                  className="flex min-h-[25rem] flex-col justify-between p-8 md:p-10"
+                  data-animate-item
+                >
                   <div className="space-y-7">
                     <IconBadge icon={Globe} />
                     <div className="max-w-[34rem] space-y-4">
@@ -312,8 +530,14 @@ function App() {
                   </div>
                 </div>
 
-                <div className="relative h-full px-6 pb-6 lg:px-0 lg:pb-0 lg:pr-6">
-                  <div className="absolute right-8 top-8 z-10 rounded-2xl border border-white/10 bg-black/38 px-5 py-4 shadow-soft backdrop-blur-md">
+                <div
+                  className="js-hover-card relative h-full px-6 pb-6 lg:px-0 lg:pb-0 lg:pr-6"
+                  data-animate-item
+                >
+                  <div
+                    className="js-live-badge absolute right-8 top-8 z-10 rounded-2xl border border-white/10 bg-black/38 px-5 py-4 shadow-soft backdrop-blur-md"
+                    data-animate-ornament
+                  >
                     <div className="flex items-center gap-3 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/75">
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
                       Live Performance Data
@@ -329,7 +553,7 @@ function App() {
 
                   <img
                     alt="Monochrome laptop mockup"
-                    className="h-full min-h-[18rem] w-full rounded-[26px] object-cover object-center lg:rounded-none"
+                    className="js-hover-media h-full min-h-[18rem] w-full rounded-[26px] object-cover object-center lg:rounded-none"
                     src="/assets/service-laptop.png"
                   />
                 </div>
@@ -337,8 +561,14 @@ function App() {
             </div>
 
             <div className="pt-8">
-              <div className="grid gap-8 border-b border-white/[0.04] pb-12 lg:grid-cols-[1.1fr_auto] lg:items-end">
-                <div className="space-y-4">
+              <div
+                className="grid gap-8 border-b border-white/[0.04] pb-12 lg:grid-cols-[1.1fr_auto] lg:items-end"
+                data-animate-group
+              >
+                <div
+                  className="space-y-4"
+                  data-animate-item
+                >
                   <h3 className="text-[clamp(2.2rem,4vw,3.2rem)] font-semibold tracking-[-0.045em]">
                     A standard for excellence.
                   </h3>
@@ -350,6 +580,7 @@ function App() {
 
                 <button
                   className="inline-flex items-center gap-2 text-base text-primary transition-colors hover:text-white"
+                  data-animate-item
                   onClick={() => navigateTo("contact")}
                   type="button"
                 >
@@ -357,13 +588,20 @@ function App() {
                 </button>
               </div>
 
-              <div className="grid gap-10 pt-12 md:grid-cols-3">
+              <div
+                className="grid gap-10 pt-12 md:grid-cols-3"
+                data-animate-group
+              >
                 {DEPLOYMENT_STEPS.map((step) => (
                   <div
                     className="space-y-6 border-t border-white/[0.04] pt-10"
+                    data-animate-item
                     key={step.number}
                   >
-                    <span className="block text-[clamp(4.5rem,8vw,7rem)] font-semibold leading-none tracking-[-0.08em] text-white/[0.12]">
+                    <span
+                      className="block text-[clamp(4.5rem,8vw,7rem)] font-semibold leading-none tracking-[-0.08em] text-white/[0.12]"
+                      data-animate-ornament
+                    >
                       {step.number}
                     </span>
                     <div className="space-y-3">
@@ -387,28 +625,43 @@ function App() {
           id="projects"
         >
           <Container className="space-y-16 md:space-y-20">
-            <div className="grid gap-10 lg:grid-cols-[1.55fr_0.82fr] lg:items-start">
-              <div>
+            <div
+              className="grid gap-10 lg:grid-cols-[1.55fr_0.82fr] lg:items-start"
+              data-animate-group
+            >
+              <div data-animate-item>
                 <p className="label">Portfolio Showcase</p>
                 <h2 className="mt-5 text-[clamp(3rem,7vw,5.85rem)] font-semibold leading-[0.93] tracking-[-0.07em]">
                   Recent <span className="text-white/16">Commissions.</span>
                 </h2>
               </div>
-              <p className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58">
+              <p
+                className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58"
+                data-animate-item
+              >
                 A curated selection of digital architectures designed for the next generation of
                 industry leaders.
               </p>
             </div>
 
-            <div className="grid gap-10 xl:grid-cols-[1.45fr_0.92fr] xl:items-center">
-              <div className="surface overflow-hidden p-0">
+            <div
+              className="grid gap-10 xl:grid-cols-[1.45fr_0.92fr] xl:items-center"
+              data-animate-group
+            >
+              <div
+                className="js-hover-card surface overflow-hidden p-0"
+                data-animate-item
+              >
                 <img
                   alt="Nexus Capital interface world map"
-                  className="h-full w-full object-cover"
+                  className="js-hover-media h-full w-full object-cover"
                   src="/assets/project-map.png"
                 />
               </div>
-              <div className="space-y-6 xl:pl-6">
+              <div
+                className="space-y-6 xl:pl-6"
+                data-animate-item
+              >
                 <p className="label">Fintech • 2024</p>
                 <div className="space-y-4">
                   <h3 className="text-[clamp(2.4rem,4vw,3.8rem)] font-semibold tracking-[-0.05em]">
@@ -423,12 +676,18 @@ function App() {
               </div>
             </div>
 
-            <div className="grid gap-10 lg:grid-cols-2">
-              <div className="space-y-6">
-                <div className="surface overflow-hidden p-0">
+            <div
+              className="grid gap-10 lg:grid-cols-2"
+              data-animate-group
+            >
+              <div
+                className="space-y-6"
+                data-animate-item
+              >
+                <div className="js-hover-card surface overflow-hidden p-0">
                   <img
                     alt="Veloce Configurator concept orb"
-                    className="h-full min-h-[34rem] w-full object-cover"
+                    className="js-hover-media h-full min-h-[34rem] w-full object-cover"
                     src="/assets/project-orb.png"
                   />
                 </div>
@@ -444,11 +703,14 @@ function App() {
                 </div>
               </div>
 
-              <div className="space-y-6 lg:pt-28">
-                <div className="surface overflow-hidden p-0">
+              <div
+                className="space-y-6 lg:pt-28"
+                data-animate-item
+              >
+                <div className="js-hover-card surface overflow-hidden p-0">
                   <img
                     alt="Stellar CRM poster concept"
-                    className="h-full min-h-[34rem] w-full object-cover"
+                    className="js-hover-media h-full min-h-[34rem] w-full object-cover"
                     src="/assets/project-stellar.png"
                   />
                 </div>
@@ -465,9 +727,15 @@ function App() {
               </div>
             </div>
 
-            <div className="surface overflow-hidden">
+            <div
+              className="surface overflow-hidden"
+              data-animate-group
+            >
               <div className="grid gap-10 lg:grid-cols-[0.98fr_1.02fr] lg:items-center">
-                <div className="space-y-8 p-8 md:p-10 lg:p-12">
+                <div
+                  className="space-y-8 p-8 md:p-10 lg:p-12"
+                  data-animate-item
+                >
                   <div className="space-y-4">
                     <p className="label">Experimental • Lab</p>
                     <h3 className="max-w-[20rem] text-[clamp(2.6rem,4vw,4.2rem)] font-semibold leading-[0.94] tracking-[-0.06em]">
@@ -487,21 +755,33 @@ function App() {
                   </Button>
                 </div>
 
-                <div className="px-8 pb-8 lg:px-0 lg:pb-0 lg:pr-8">
+                <div
+                  className="js-hover-card px-8 pb-8 lg:px-0 lg:pb-0 lg:pr-8"
+                  data-animate-item
+                >
                   <img
                     alt="Quantum identity portrait concept"
-                    className="h-full min-h-[22rem] w-full rounded-[26px] object-cover"
+                    className="js-hover-media h-full min-h-[22rem] w-full rounded-[26px] object-cover"
                     src="/assets/project-portrait.png"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="surface panel-glow rounded-[32px] bg-[#171616]/92 px-6 py-14 text-center md:px-12 md:py-20">
-              <h3 className="text-[clamp(2.4rem,4.8vw,4.25rem)] font-semibold tracking-[-0.055em]">
+            <div
+              className="surface panel-glow rounded-[32px] bg-[#171616]/92 px-6 py-14 text-center md:px-12 md:py-20"
+              data-animate-group
+            >
+              <h3
+                className="text-[clamp(2.4rem,4.8vw,4.25rem)] font-semibold tracking-[-0.055em]"
+                data-animate-item
+              >
                 Ready to start your next commission?
               </h3>
-              <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <div
+                className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row"
+                data-animate-item
+              >
                 <Button
                   className="min-w-[12.5rem]"
                   onClick={() => navigateTo("contact")}
@@ -528,20 +808,29 @@ function App() {
           id="process"
         >
           <Container className="space-y-16 md:space-y-20">
-            <div className="grid gap-10 lg:grid-cols-[1.5fr_0.85fr] lg:items-start">
-              <div>
+            <div
+              className="grid gap-10 lg:grid-cols-[1.5fr_0.85fr] lg:items-start"
+              data-animate-group
+            >
+              <div data-animate-item>
                 <p className="label">Execution Excellence</p>
                 <h2 className="mt-5 text-[clamp(3rem,7vw,5.75rem)] font-semibold leading-[0.95] tracking-[-0.07em]">
                   The Art of the Build.
                 </h2>
               </div>
-              <p className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58">
+              <p
+                className="max-w-[25rem] pt-2 text-lg leading-9 text-white/58"
+                data-animate-item
+              >
                 We transform complex challenges into elegant digital realities through a rigorous,
                 high-fidelity methodology designed for scale and stability.
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+              data-animate-group
+            >
               {PROCESS_STEPS.map((step) => (
                 <ProcessCard
                   description={step.description}
@@ -555,16 +844,25 @@ function App() {
               ))}
             </div>
 
-            <div className="surface overflow-hidden">
+            <div
+              className="surface overflow-hidden"
+              data-animate-group
+            >
               <div className="grid gap-8 lg:grid-cols-[1.02fr_1fr] lg:items-center">
-                <div className="p-8 md:p-10">
+                <div
+                  className="js-hover-card p-8 md:p-10"
+                  data-animate-item
+                >
                   <img
                     alt="Minimal desk workspace"
-                    className="h-full w-full rounded-[28px] object-cover"
+                    className="js-hover-media h-full w-full rounded-[28px] object-cover"
                     src="/assets/process-desk.png"
                   />
                 </div>
-                <div className="space-y-8 p-8 pt-0 md:p-10 md:pt-0">
+                <div
+                  className="space-y-8 p-8 pt-0 md:p-10 md:pt-0"
+                  data-animate-item
+                >
                   <div className="space-y-4">
                     <h3 className="text-[clamp(2.4rem,4vw,3.6rem)] font-semibold tracking-[-0.05em]">
                       Engineered for Permanence
@@ -593,12 +891,19 @@ function App() {
 
             <div
               className="surface panel-glow rounded-[32px] bg-[radial-gradient(circle_at_50%_10%,rgba(167,160,255,0.1),transparent_28%),linear-gradient(180deg,#060607_0%,#0a0a0c_100%)] px-6 py-16 text-center md:px-12 md:py-24"
+              data-animate-group
               id="contact"
             >
-              <h3 className="mx-auto max-w-[14ch] text-[clamp(2.8rem,5vw,4.8rem)] font-semibold leading-[0.94] tracking-[-0.06em]">
+              <h3
+                className="mx-auto max-w-[14ch] text-[clamp(2.8rem,5vw,4.8rem)] font-semibold leading-[0.94] tracking-[-0.06em]"
+                data-animate-item
+              >
                 Ready to build the future?
               </h3>
-              <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <div
+                className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row"
+                data-animate-item
+              >
                 <Button
                   className="min-w-[11.5rem]"
                   onClick={() => setMenuOpen(true)}
@@ -624,7 +929,7 @@ function App() {
         <Container className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <button
-              className="font-mono text-[1.65rem] font-semibold tracking-[0.2em] text-white"
+              className="font-mono text-[1.65rem] font-semibold tracking-[0.2em] text-white transition-transform duration-300 hover:scale-[1.03]"
               onClick={() => navigateTo("hero")}
               type="button"
             >
@@ -690,7 +995,7 @@ function SiteHeader({
           <div className="grid grid-cols-3 items-center">
             <button
               aria-label="Open navigation menu"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+              className="js-hero-header-menu inline-flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
               onClick={onMenuOpen}
               type="button"
             >
@@ -698,7 +1003,7 @@ function SiteHeader({
             </button>
 
             <button
-              className="justify-self-center font-mono text-[1.65rem] font-semibold tracking-[0.25em] text-white"
+              className="js-hero-header-brand justify-self-center font-mono text-[1.65rem] font-semibold tracking-[0.25em] text-white"
               onClick={() => onNavigate("hero")}
               type="button"
             >
@@ -706,7 +1011,7 @@ function SiteHeader({
             </button>
 
             <Button
-              className="h-10 justify-self-end px-4 text-sm normal-case tracking-normal sm:px-5"
+              className="js-hero-header-cta h-10 justify-self-end px-4 text-sm normal-case tracking-normal sm:px-5"
               onClick={() => onNavigate("contact")}
             >
               Schedule a Call
@@ -777,7 +1082,7 @@ function MobileMenu({ open, activeSection, onClose, onNavigate }: MobileMenuProp
           <div className="space-y-8">
             {NAV_ITEMS.map((item) => (
               <button
-                className="flex items-start gap-7 text-left"
+                className="js-menu-item flex items-start gap-7 text-left"
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 type="button"
@@ -795,7 +1100,7 @@ function MobileMenu({ open, activeSection, onClose, onNavigate }: MobileMenuProp
             ))}
           </div>
 
-          <div className="mt-auto border-t border-white/[0.08] pt-10">
+          <div className="js-menu-footer mt-auto border-t border-white/[0.08] pt-10">
             <SheetClose asChild>
               <Button
                 className="w-full"
@@ -829,7 +1134,10 @@ function Container({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 function IconBadge({ icon: Icon }: { icon: ElementType }) {
   return (
-    <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-inset ring-primary/10">
+    <div
+      className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-inset ring-primary/10"
+      data-animate-ornament
+    >
       <Icon className="h-5 w-5" />
     </div>
   );
@@ -885,8 +1193,14 @@ function ProcessCard({
   children: string[];
 }) {
   return (
-    <div className="surface relative min-h-[27rem] overflow-hidden p-8 md:p-9">
-      <span className="pointer-events-none absolute right-6 top-4 text-[clamp(5rem,8vw,6.7rem)] font-semibold leading-none tracking-[-0.08em] text-white/[0.08]">
+    <div
+      className="surface relative min-h-[27rem] overflow-hidden p-8 md:p-9"
+      data-animate-item
+    >
+      <span
+        className="pointer-events-none absolute right-6 top-4 text-[clamp(5rem,8vw,6.7rem)] font-semibold leading-none tracking-[-0.08em] text-white/[0.08]"
+        data-animate-ornament
+      >
         {number}
       </span>
 
@@ -918,7 +1232,10 @@ function ProcessCard({
 
 function Metric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      data-animate-ornament
+    >
       <div className="text-[clamp(2.8rem,5vw,4.4rem)] font-semibold leading-none tracking-[-0.06em] text-primary">
         {value}
       </div>
